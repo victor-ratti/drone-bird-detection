@@ -65,6 +65,39 @@ Conséquence directe sur la suite : inutile de travailler la discrimination sur
 ce jeu, elle est déjà parfaite. L'étape 4 de durcissement devient obligatoire,
 pas optionnelle.
 
+### Durcissement : où le 0.98 ment
+
+Le chiffre de tête mesure surtout le cas facile. Trois mesures indépendantes le
+montrent, détail dans `resultats/04_durcissement.md`.
+
+**Les classes sont largement séparables par la taille.** Côté médian d'un
+oiseau : 378 px. D'un drone : 66 px. Rapport 5.72. Un classifieur à un seuil
+unique sur la taille de la boîte, **sans regarder un seul pixel**, atteint
+76.1 % d'exactitude, contre 50.7 % au hasard. Un quart du travail est offert par
+la statistique du jeu.
+
+**La performance s'effondre sur les petits objets.** Annotations et prédictions
+filtrées par la même bande de taille.
+
+| Bande | Bird AP50 | Drone AP50 | mAP50 |
+|---|---|---|---|
+| Petits, < 32 px | **0.3824** (13 obj.) | 0.8634 (76) | **0.6229** |
+| Moyens, 32 à 96 px | 0.8047 (95) | 0.9215 (233) | 0.8631 |
+| Grands, >= 96 px | 0.9957 (348) | 0.9478 (135) | 0.9718 |
+| Jeu complet | 0.9736 (456) | 0.9892 (444) | 0.9814 |
+
+**Le mAP50 passe de 0.981 à 0.623 sur les petits objets, et la classe Bird tombe
+à 0.382.** Les oiseaux du jeu étant presque toujours grands, le modèle n'a
+jamais appris à reconnaître un petit oiseau.
+
+**Et le jeu ne contient pas le cas difficile** : 13 petits oiseaux dans tout le
+jeu de test. Le problème opérationnel du contre-drone, distinguer à distance un
+petit objet volant d'un oiseau, n'est représenté ni en quantité ni en
+difficulté.
+
+Suite : rejouer les trois mêmes mesures sur Anti-UAV, qui contient des séquences
+de petits objets à distance. Le pipeline complet se rejoue tel quel.
+
 Caractéristiques du modèle : 2 582 542 paramètres, 6.4 GFLOPs, 5.2 Mo en
 PyTorch, 10.1 Mo en ONNX fp32. Inférence à 4.3 ms sur T4. La mesure qui compte,
 sur CPU ARM, arrive à l'étape 3.
@@ -142,8 +175,10 @@ sous-ensemble de petits objets et en mesurant dessus séparément.
       taux de perte de piste sur des vidéos.
 - [ ] **3. Compression.** Export ONNX, quantification int8, mesure de la
       latence CPU avant et après, à dégradation de précision mesurée.
-- [ ] **4. Durcissement.** Isoler les petits objets, mesurer la chute de
-      performance, analyser la confusion drone / oiseau restante.
+- [x] **4. Durcissement.** mAP50 de 0.981 à 0.623 sur les objets de moins de
+      32 px, Bird à 0.382. Biais d'échelle de 5.72 entre les classes, un seuil
+      de taille seul atteint 76.1 %. Fait le 2026-09-08.
+- [ ] **5. Rejouer sur Anti-UAV**, qui contient le cas difficile absent ici.
 
 ## Organisation du dépôt
 

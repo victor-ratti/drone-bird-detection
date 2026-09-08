@@ -1,0 +1,11 @@
+{
+  "seuil_px": 152.4,
+  "classe_au_dessus": "Bird",
+  "exactitude_train": 0.7464,
+  "exactitude_test": 0.7611,
+  "par_classe_test": {
+    "Bird": 0.7368,
+    "Drone": 0.786
+  },
+  "rapport_echelle": 5.72
+}
