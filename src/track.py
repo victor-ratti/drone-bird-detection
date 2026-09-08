@@ -37,13 +37,15 @@ import time
 
 import cv2
 import numpy as np
-import onnxruntime as ort
-import supervision as sv
-from trackers import ByteTrackTracker
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from evaluate import predict  # noqa: E402
 from preprocess import letterbox  # noqa: E402
+
+# onnxruntime, supervision and trackers are imported inside main(). The
+# statistics below are pure functions over track records: keeping them
+# importable without the tracking stack lets the tests, and CI, exercise them
+# with numpy alone.
 
 COLORS = {0: (60, 120, 255), 1: (255, 140, 40)}   # BGR: Bird blue-ish, Drone orange
 NAMES = {0: "Bird", 1: "Drone"}
@@ -172,6 +174,10 @@ def main():
     ap.add_argument("--gif-every", type=int, default=3,
                     help="keep one processed frame in N for the GIF")
     args = ap.parse_args()
+
+    import onnxruntime as ort
+    import supervision as sv
+    from trackers import ByteTrackTracker
 
     cap = cv2.VideoCapture(args.video)
     if not cap.isOpened():
