@@ -126,7 +126,7 @@ building seen from above. The detector has never seen the ground from a drone.
 
 On the Snapdragon X Elite, 10 threads: detection 44 ms per 1080p frame and
 57 ms per 2696x2160 frame, video decode and letterbox included. Tracking adds
-under 1 ms. End to end, 22 FPS at 1080p, 17 FPS at 4K, against 39.5 FPS for
+under 1 ms. End to end, 22 FPS at 1080p, 17 FPS at 4K, against 39.1 FPS for
 inference alone on a 640 tensor: at this resolution, decoding and resizing
 cost as much as the network.
 
