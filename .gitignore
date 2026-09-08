@@ -1,11 +1,11 @@
-# Jeu de donnees : jamais versionne, il se retelecharge depuis Roboflow
+﻿# Jeu de donnees : jamais versionne, il se retelecharge depuis Roboflow
 data/
 *.zip
 
 # Poids lourds. Garder seulement le modele final, force avec git add -f
 *.pt
 *.onnx
-!modeles/best.onnx
+!modeles/*.onnx
 
 # Secrets. La cle API Roboflow ne doit jamais partir sur GitHub
 .env
