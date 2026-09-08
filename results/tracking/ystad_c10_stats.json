@@ -1,0 +1,43 @@
+{
+  "frames": 603,
+  "frames_with_detection": 554,
+  "frames_with_track": 543,
+  "coverage": 0.9801,
+  "tracks": 1,
+  "tracks_per_class": {
+    "Drone": 1
+  },
+  "track_length_frames": {
+    "min": 543,
+    "median": 543,
+    "max": 543
+  },
+  "track_births_per_minute": 2.97,
+  "expected_objects": 1,
+  "fragmentation": 1.0,
+  "track_breaks": 0,
+  "detect_ms_per_frame": 381.13,
+  "detect_fps": 2.6,
+  "end_to_end_ms_per_frame": 387.05,
+  "end_to_end_fps": 2.6,
+  "video": "ystad_hovering.webm",
+  "frames_with_unconfirmed_only": 14,
+  "resolution": [
+    2696,
+    2160
+  ],
+  "fps_video": 29.83,
+  "frame_range": [
+    0,
+    603
+  ],
+  "tracker": {
+    "library": "trackers.ByteTrackTracker",
+    "activation": 0.25,
+    "high_conf": 0.6,
+    "min_frames": 2,
+    "lost_buffer": 30,
+    "min_iou": 0.1,
+    "detector_conf": 0.1
+  }
+}

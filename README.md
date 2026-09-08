@@ -33,8 +33,9 @@ This project addresses both, and measures both.
 | Dataset audit | `src/analyze_sizes.py`, `src/size_bias.py` | Object-size distribution, and a no-pixel size-only classifier |
 | Benchmark | `src/benchmark.py` | CPU latency with process isolation, thread sweep, dispersion |
 | Compression | `src/quantize.py` | Static and dynamic int8 quantization with calibration |
+| Tracking | `src/track.py` | ByteTrack over a video, annotated output, coverage and fragmentation stats |
 | Figures | `src/plot_size_bands.py` | AP50 by size band |
-| Tests | `tests/` | IoU, NMS, AP arithmetic and letterbox mapping pinned to hand-computed values |
+| Tests | `tests/` | IoU, NMS, AP, letterbox mapping, tracking stats and back-projection, pinned to hand-computed values |
 
 The model is the specimen. The evaluator and the benchmark harness are the
 instruments, and most of the work went into making the instruments
@@ -147,6 +148,39 @@ Measurement machine: Snapdragon X Elite X1E80100, 12 cores, Windows 11 ARM64,
 no discrete GPU. Deliberate choice: this architecture is closer to the compute
 boards drones carry than a desktop graphics card is.
 
+### Tracking on real footage
+
+ByteTrack on top of the detector, over two continuous shots from Wikimedia
+Commons. No annotated trajectories exist for public drone footage, so the
+metrics are coverage, fragmentation and track length; MOTA and IDF1 wait for
+Anti-UAV. Details in `results/05_tracking.md`.
+
+![Hawk tracked as one id through an attack pass](results/figures/tracking_hawk.gif)
+
+| Shot | Detector threshold fed to the tracker | Frames with track | Coverage | Tracks | Breaks |
+|---|---|---|---|---|---|
+| Hovering drone, 603 frames, one object | 0.25 | 317 | 0.79 | 2 | 1 |
+| Hovering drone, 603 frames, one object | **0.10** | **543** | **0.98** | **1** | **0** |
+| Hawk, three attack passes, 855 frames | 0.25 | 186 | 0.72 | 3 on the hawk, 2 on ground structures | 0 within a pass |
+| Hawk, three attack passes, 855 frames | 0.10 | 198 | 0.47 | 3 on the hawk, 2 on ground structures, 1 blur | 0 within a pass |
+
+**Feeding low-score detections to the tracker is what makes ByteTrack work,
+and only when the object is actually there.** On the hovering shot, going from
+0.25 to 0.10 turns two ids with a 137-frame gap into one id over 543 frames:
+the drone never leaves, its confidence dips in gusts, the second association
+stage bridges the dips. On the hawk, the same change buys nothing: the bird
+leaves the frame between passes, and a motion-only tracker cannot re-identify
+after a true absence. Judged per continuous appearance, no pass breaks.
+
+Two more things the footage exposed. The hawk filling the frame is classified
+Bird at 0.78, the hovering drone filling the frame is classified Drone at
+0.38: the size bias of the training set, seen from the other side. And three
+of the five videos found were edited documentaries, useless as benchmarks;
+the harness gained `--start` and `--end` to isolate one continuous shot.
+
+Tracking adds under 1 ms per frame. At 1080p, decoding and letterboxing cost as
+much as the network: 22 FPS end to end, against 39.5 FPS for inference alone.
+
 ## Measurement method
 
 Three spectacular results in this project turned out to be artifacts. Each was
@@ -160,6 +194,11 @@ caught by a reproducibility check, not by a better explanation.
 3. **mAP50 of 0.098 on small objects.** Only annotations were size-filtered,
    not predictions, so every correct large detection counted as a false
    positive. The confusion matrix, computed differently, contradicted it.
+4. **An 82-frame "longest track" on the hawk video.** It was the tracker's
+   id -1, the bucket of tentative detections not yet confirmed, counted as a
+   track. And the first tracking runs pre-filtered detections at the
+   tracker's own activation threshold, disabling the low-score recovery that
+   is the point of ByteTrack. Both fixed before any number was written down.
 
 Superseded runs are kept in `results/superseded/` for the record. None of
 their numbers is cited.
@@ -200,11 +239,13 @@ in the hardening section.
 - [x] **Hardening.** mAP50 from 0.981 to 0.623 under 32 px, Bird at 0.382.
       Scale bias of 5.72 between classes; a size threshold alone reaches
       76.1 %.
+- [x] **Tracking.** ByteTrack over two continuous shots. Low-score recovery
+      turns 2 ids into 1 on a hovering drone; it cannot re-identify a hawk
+      that leaves the frame between passes.
 - [ ] **Accuracy of the static int8 model.** One `evaluate.py` run away.
-- [ ] **Tracking.** ByteTrack over a video sequence, track-loss rate as the
-      metric. Closes the "detect and track" loop.
 - [ ] **Anti-UAV.** Rerun the three hardening measurements on a dataset that
-      contains the hard case.
+      contains the hard case, and compute MOTA and IDF1 on its annotated
+      sequences.
 - [ ] **NPU.** onnxruntime-qnn on the Snapdragon, where int8 should pay off.
 
 ## Reproduce
@@ -245,6 +286,10 @@ python -m venv .venv
 .venv/Scripts/python src/benchmark.py models/*.onnx --threads 10
 .venv/Scripts/python src/benchmark.py models/baseline_best.onnx --sweep 1,2,4,8,12
 
+# tracking over a continuous shot (any video opencv can read), feed low scores to the tracker
+.venv/Scripts/python src/track.py models/baseline_best.onnx data/videos/clip.webm \
+    --out results/tracking/clip --conf 0.10 --expected-objects 1 --gif
+
 # rebuild the quantized models
 .venv/Scripts/python src/quantize.py models/baseline_best.onnx --mode dynamic
 .venv/Scripts/python src/quantize.py models/baseline_best.onnx --mode static \
@@ -276,9 +321,11 @@ In order of expected return.
    size-only classifier are the two tools that expose a dataset's real
    difficulty. Running them on a set that contains small, distant, ambiguous
    objects would turn the hardening section from a diagnosis into a result.
-2. **Add tracking.** ByteTrack on top of the detector, over real drone
-   footage, with track-loss rate per sequence. The job title this project
-   targets is "detect and track"; the second half is missing.
+2. **Track on the intended scene, with ground truth.** The harness works,
+   but public footage gave a drone's point of view and a top-down close-up,
+   never a small drone in the sky filmed from the ground. Anti-UAV has that,
+   with annotated trajectories: MOTA and IDF1 instead of coverage and
+   fragmentation.
 3. **Measure int8 where it should win.** QNN execution provider on the
    Snapdragon NPU, and XNNPACK on the CPU. If neither helps, the "backend
    first" conclusion is confirmed on two more backends; if one does, the

@@ -125,18 +125,24 @@ def draw(frame, boxes, ids, classes, confs):
                     0.55, (255, 255, 255), 1, cv2.LINE_AA)
 
 
-def write_gif(frames, path, every=3, width=640, fps=10, max_frames=150):
-    """Small GIF for the README: subsampled, resized, capped in length."""
+GIF_WIDTH = 480
+GIF_MAX_FRAMES = 150
+
+
+def gif_frame(frame, width=GIF_WIDTH):
+    """Downscale on the fly: keeping full-resolution frames in memory for a
+    long video would need gigabytes."""
+    h, w = frame.shape[:2]
+    return cv2.resize(frame, (width, int(h * width / w)), interpolation=cv2.INTER_AREA)
+
+
+def write_gif(frames, path, fps=10):
+    """Small GIF for the README, from already downscaled frames."""
     from PIL import Image
-    picked = frames[::every][:max_frames]
-    if not picked:
+    if not frames:
         return
-    imgs = []
-    for f in picked:
-        h, w = f.shape[:2]
-        scale = width / w
-        small = cv2.resize(f, (width, int(h * scale)), interpolation=cv2.INTER_AREA)
-        imgs.append(Image.fromarray(cv2.cvtColor(small, cv2.COLOR_BGR2RGB)))
+    imgs = [Image.fromarray(cv2.cvtColor(f, cv2.COLOR_BGR2RGB)).quantize(colors=128)
+            for f in frames]
     imgs[0].save(path, save_all=True, append_images=imgs[1:],
                  duration=int(1000 / fps), loop=0, optimize=True)
 
@@ -162,7 +168,9 @@ def main():
                     help="frames a lost track is kept before deletion")
     ap.add_argument("--min-iou", type=float, default=0.1,
                     help="minimum IoU for a detection to match a track")
-    ap.add_argument("--gif", action="store_true")
+    ap.add_argument("--gif", action="store_true", help="also write a README-sized GIF")
+    ap.add_argument("--gif-every", type=int, default=3,
+                    help="keep one processed frame in N for the GIF")
     args = ap.parse_args()
 
     cap = cv2.VideoCapture(args.video)
@@ -190,7 +198,7 @@ def main():
     writer = cv2.VideoWriter(args.out + ".mp4", cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
 
     records, gif_frames = [], []
-    frames_with_detection, n = 0, 0
+    frames_with_detection, unconfirmed_frames, n = 0, 0, 0
     detect_ms, total_ms = [], []
     if args.start:
         cap.set(cv2.CAP_PROP_POS_FRAMES, args.start)
@@ -219,6 +227,14 @@ def main():
         total_ms.append((t2 - t0) * 1000)
 
         if len(tracked) and tracked.tracker_id is not None:
+            # tracker_id -1 marks a tentative track, not yet confirmed over
+            # minimum_consecutive_frames. It is a detection the tracker is
+            # still deciding about, not an object being followed: counted
+            # apart, never as a track.
+            confirmed = tracked.tracker_id >= 0
+            unconfirmed_frames += int((~confirmed).any())
+            tracked = tracked[confirmed]
+        if len(tracked):
             for box, tid, c, s in zip(tracked.xyxy, tracked.tracker_id,
                                       tracked.class_id, tracked.confidence):
                 records.append({"frame": frame_idx, "track_id": int(tid), "class_id": int(c),
@@ -229,8 +245,8 @@ def main():
         cv2.putText(frame, f"frame {frame_idx}  tracks {len(tracked)}", (10, 24),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
         writer.write(frame)
-        if args.gif:
-            gif_frames.append(frame)
+        if args.gif and n % args.gif_every == 0 and len(gif_frames) < GIF_MAX_FRAMES:
+            gif_frames.append(gif_frame(frame))
         n += 1
         frame_idx += 1
         if n % 100 == 0:
@@ -243,6 +259,7 @@ def main():
                       statistics.median(detect_ms) if detect_ms else None,
                       statistics.median(total_ms) if total_ms else None)
     stats["video"] = os.path.basename(args.video)
+    stats["frames_with_unconfirmed_only"] = unconfirmed_frames
     stats["resolution"] = [w, h]
     stats["fps_video"] = round(fps, 2)
     stats["frame_range"] = [args.start, args.start + n]

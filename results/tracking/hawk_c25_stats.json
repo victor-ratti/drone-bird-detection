@@ -1,0 +1,44 @@
+{
+  "frames": 855,
+  "frames_with_detection": 260,
+  "frames_with_track": 186,
+  "coverage": 0.7154,
+  "tracks": 5,
+  "tracks_per_class": {
+    "Bird": 3,
+    "Drone": 2
+  },
+  "track_length_frames": {
+    "min": 11,
+    "median": 21,
+    "max": 95
+  },
+  "track_births_per_minute": 8.41,
+  "expected_objects": 1,
+  "fragmentation": 5.0,
+  "track_breaks": 4,
+  "detect_ms_per_frame": 43.28,
+  "detect_fps": 23.1,
+  "end_to_end_ms_per_frame": 43.51,
+  "end_to_end_fps": 23.0,
+  "video": "hawk_attacks_drone.webm",
+  "frames_with_unconfirmed_only": 80,
+  "resolution": [
+    1920,
+    1080
+  ],
+  "fps_video": 23.98,
+  "frame_range": [
+    0,
+    855
+  ],
+  "tracker": {
+    "library": "trackers.ByteTrackTracker",
+    "activation": 0.25,
+    "high_conf": 0.6,
+    "min_frames": 2,
+    "lost_buffer": 30,
+    "min_iou": 0.1,
+    "detector_conf": 0.25
+  }
+}
