@@ -1,0 +1,33 @@
+{
+  "frames": 1233,
+  "frames_with_detection": 406,
+  "frames_with_track": 360,
+  "coverage": 0.8867,
+  "tracks": 18,
+  "tracks_per_class": {
+    "Bird": 7,
+    "Drone": 11
+  },
+  "track_length_frames": {
+    "min": 1,
+    "median": 14.5,
+    "max": 93
+  },
+  "track_births_per_minute": 26.28,
+  "detect_ms_per_frame": 43.24,
+  "detect_fps": 23.1,
+  "end_to_end_ms_per_frame": 44.14,
+  "end_to_end_fps": 22.7,
+  "video": "173rd_drone_training.webm",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "fps_video": 30.0,
+  "tracker": {
+    "activation": 0.25,
+    "lost_buffer": 30,
+    "match": 0.8,
+    "detector_conf": 0.25
+  }
+}

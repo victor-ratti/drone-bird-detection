@@ -9,4 +9,6 @@ pyyaml>=6.0
 sympy>=1.13          # required by onnxruntime's quantization preprocessing
 matplotlib>=3.8      # figures only
 roboflow>=1.1        # dataset download only
+supervision>=0.30    # Detections container used by the tracker
+trackers>=2.6        # ByteTrackTracker, tracking only
 pytest>=8.0          # tests only

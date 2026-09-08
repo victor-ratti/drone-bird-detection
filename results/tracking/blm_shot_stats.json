@@ -1,0 +1,42 @@
+{
+  "frames": 17,
+  "frames_with_detection": 17,
+  "frames_with_track": 17,
+  "coverage": 1.0,
+  "tracks": 2,
+  "tracks_per_class": {
+    "Drone": 2
+  },
+  "track_length_frames": {
+    "min": 1,
+    "median": 8.5,
+    "max": 16
+  },
+  "track_births_per_minute": 169.24,
+  "expected_objects": 1,
+  "fragmentation": 2.0,
+  "track_breaks": 1,
+  "detect_ms_per_frame": 34.21,
+  "detect_fps": 29.2,
+  "end_to_end_ms_per_frame": 34.81,
+  "end_to_end_fps": 28.7,
+  "video": "blm_drone_training.webm",
+  "resolution": [
+    1920,
+    1280
+  ],
+  "fps_video": 23.98,
+  "frame_range": [
+    49,
+    66
+  ],
+  "tracker": {
+    "library": "trackers.ByteTrackTracker",
+    "activation": 0.25,
+    "high_conf": 0.6,
+    "min_frames": 2,
+    "lost_buffer": 30,
+    "min_iou": 0.1,
+    "detector_conf": 0.25
+  }
+}
