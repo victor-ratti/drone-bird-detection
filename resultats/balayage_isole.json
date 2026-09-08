@@ -1,0 +1,139 @@
+{
+  "machine": {
+    "processeur": "Snapdragon(R) X 12-core X1E80100 @ 3.40 GHz",
+    "architecture": "ARM64",
+    "systeme": "Windows 11",
+    "coeurs_logiques": 12,
+    "onnxruntime": "1.29.0"
+  },
+  "charge_cpu_fin": 37,
+  "modele": "baseline_n_best.onnx",
+  "balayage": [
+    {
+      "modele": "baseline_n_best.onnx",
+      "taille_mo": 10.11,
+      "forme_entree": [
+        1,
+        3,
+        640,
+        640
+      ],
+      "runs": 60,
+      "threads": 1,
+      "latence_ms_median": 330.92,
+      "latence_ms_moyenne": 335.51,
+      "latence_ms_p90": 420.1,
+      "latence_ms_min": 153.62,
+      "latence_ms_max": 527.86,
+      "fps_median": 3.0
+    },
+    {
+      "modele": "baseline_n_best.onnx",
+      "taille_mo": 10.11,
+      "forme_entree": [
+        1,
+        3,
+        640,
+        640
+      ],
+      "runs": 60,
+      "threads": 2,
+      "latence_ms_median": 142.28,
+      "latence_ms_moyenne": 117.39,
+      "latence_ms_p90": 145.96,
+      "latence_ms_min": 74.65,
+      "latence_ms_max": 148.85,
+      "fps_median": 7.0
+    },
+    {
+      "modele": "baseline_n_best.onnx",
+      "taille_mo": 10.11,
+      "forme_entree": [
+        1,
+        3,
+        640,
+        640
+      ],
+      "runs": 60,
+      "threads": 4,
+      "latence_ms_median": 40.52,
+      "latence_ms_moyenne": 45.46,
+      "latence_ms_p90": 82.77,
+      "latence_ms_min": 39.68,
+      "latence_ms_max": 84.32,
+      "fps_median": 24.7
+    },
+    {
+      "modele": "baseline_n_best.onnx",
+      "taille_mo": 10.11,
+      "forme_entree": [
+        1,
+        3,
+        640,
+        640
+      ],
+      "runs": 60,
+      "threads": 6,
+      "latence_ms_median": 31.48,
+      "latence_ms_moyenne": 31.56,
+      "latence_ms_p90": 32.24,
+      "latence_ms_min": 30.49,
+      "latence_ms_max": 33.07,
+      "fps_median": 31.8
+    },
+    {
+      "modele": "baseline_n_best.onnx",
+      "taille_mo": 10.11,
+      "forme_entree": [
+        1,
+        3,
+        640,
+        640
+      ],
+      "runs": 60,
+      "threads": 8,
+      "latence_ms_median": 25.89,
+      "latence_ms_moyenne": 25.86,
+      "latence_ms_p90": 26.34,
+      "latence_ms_min": 24.77,
+      "latence_ms_max": 26.94,
+      "fps_median": 38.6
+    },
+    {
+      "modele": "baseline_n_best.onnx",
+      "taille_mo": 10.11,
+      "forme_entree": [
+        1,
+        3,
+        640,
+        640
+      ],
+      "runs": 60,
+      "threads": 10,
+      "latence_ms_median": 23.93,
+      "latence_ms_moyenne": 23.97,
+      "latence_ms_p90": 24.63,
+      "latence_ms_min": 23.02,
+      "latence_ms_max": 24.99,
+      "fps_median": 41.8
+    },
+    {
+      "modele": "baseline_n_best.onnx",
+      "taille_mo": 10.11,
+      "forme_entree": [
+        1,
+        3,
+        640,
+        640
+      ],
+      "runs": 60,
+      "threads": 12,
+      "latence_ms_median": 24.42,
+      "latence_ms_moyenne": 24.61,
+      "latence_ms_p90": 26.13,
+      "latence_ms_min": 22.8,
+      "latence_ms_max": 27.81,
+      "fps_median": 41.0
+    }
+  ]
+}

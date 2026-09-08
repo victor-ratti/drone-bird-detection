@@ -104,15 +104,31 @@ def charge_cpu():
         return None
 
 
-def balayer(chemin, liste, runs, chauffe, sortie_json=None):
-    """Balaye le nombre de threads intra-op sur un modele.
+def mesurer_isole(chemin, runs, chauffe, threads):
+    """Mesure dans un processus neuf.
 
-    Sur un CPU partage avec d'autres applications, la latence n'est pas
-    monotone en nombre de threads : au-dela d'un certain point la contention
-    et le trafic de cache coutent plus que le parallelisme n'apporte. Ce
-    balayage trouve le point de fonctionnement, qui doit ensuite etre fige
-    pour que toute comparaison entre modeles ait un sens.
+    Indispensable : onnxruntime ne libere pas ses pools de threads a la
+    destruction d'une session. Enchainer plusieurs mesures dans le meme
+    processus fait s'accumuler les threads et la mesure suivante mesure la
+    contention laissee par la precedente, pas le modele. Constate le
+    2026-09-08 : un balayage en un seul processus donnait un optimum
+    fantome a 4 threads et un facteur 8 sur les 12 threads, tous deux
+    disparus des que chaque point tourne isole.
     """
+    code = (
+        "import json,sys;sys.path.insert(0,%r);"
+        "from banc import mesurer;"
+        "print(json.dumps(mesurer(%r,%d,%d,%s)))"
+        % (os.path.dirname(os.path.abspath(__file__)),
+           chemin, runs, chauffe, repr(threads))
+    )
+    import subprocess
+    sortie = subprocess.check_output([sys.executable, "-c", code], text=True)
+    return json.loads(sortie.strip().splitlines()[-1])
+
+
+def balayer(chemin, liste, runs, chauffe, sortie_json=None):
+    """Balaye le nombre de threads intra-op, un processus neuf par point."""
     threads = [int(x) for x in liste.split(",") if x.strip()]
     infos = machine()
     print("Machine de mesure")
@@ -128,7 +144,7 @@ def balayer(chemin, liste, runs, chauffe, sortie_json=None):
 
     lignes = []
     for t in threads:
-        r = mesurer(chemin, runs, chauffe, t)
+        r = mesurer_isole(chemin, runs, chauffe, t)
         lignes.append(r)
         print(f"{t:>7} {r['latence_ms_median']:>9.2f}m "
               f"{r['latence_ms_p90']:>8.2f}m {r['fps_median']:>8.1f}")
@@ -183,7 +199,8 @@ def main():
             print(f"  introuvable, ignore : {chemin}", file=sys.stderr)
             continue
         print(f"  mesure de {os.path.basename(chemin)} ...", end="", flush=True)
-        lignes.append(mesurer(chemin, args.runs, args.chauffe, args.threads))
+        # Un processus par modele, pour la meme raison que dans balayer().
+        lignes.append(mesurer_isole(chemin, args.runs, args.chauffe, args.threads))
         print(" fait")
     print()
 

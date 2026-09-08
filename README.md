@@ -71,11 +71,28 @@ sur CPU ARM, arrive à l'étape 3.
 
 ### Vitesse et taille
 
-| Modèle | Format | Taille | Latence CPU (ms) | FPS |
-|---|---|---|---|---|
-| `baseline_n` (à remplir) | PyTorch | | | |
-| `baseline_n` (à remplir) | ONNX | | | |
-| `baseline_n` quantifié int8 (à remplir) | ONNX | | | |
+Mesures du 2026-09-08, 10 threads intra-op, 100 passes, un processus par
+modèle. Voir `resultats/02_banc_protocole.md` pour le protocole et pour
+l'erreur de méthode qui a failli fausser cette table.
+
+| Modèle | Format | Taille | Médiane | p90 | FPS |
+|---|---|---|---|---|---|
+| `baseline_n` | ONNX fp32 | 10.11 Mo | **23.97 ms** | 24.65 ms | **41.7** |
+| `baseline_n` | ONNX int8 dynamique | 2.85 Mo | 2016.79 ms | 2276.10 ms | 0.5 |
+| `baseline_n` | ONNX int8 statique | à venir | | | |
+
+**Le modèle fp32 tient déjà le temps réel sur CPU ARM**, sans accélérateur, à
+41.7 images par seconde.
+
+**La quantification dynamique est un piège sur ce type de réseau** : taille
+divisée par 3.55, vitesse divisée par 84. Elle bascule les convolutions sur des
+noyaux entiers sans implémentation optimisée en ARM64, et requantifie les
+activations à chaque inférence. Elle vise les MatMul et les LSTM, pas les Conv.
+Conservée comme témoin mesuré.
+
+Le nombre de threads compte autant que le modèle : 1 thread donne 330 ms, 10
+threads en donnent 24. Sur le calculateur d'un drone, ce réglage est une
+décision de déploiement, pas un détail.
 
 Machine de mesure : Snapdragon X Elite X1E80100, 12 coeurs, Windows ARM64,
 sans GPU dédié. Choix volontaire : cette architecture est proche de celle des
