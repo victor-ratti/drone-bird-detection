@@ -36,17 +36,34 @@ Par classe, sur le jeu de test :
 | Drone | 0.9928 | 0.738 | 0.984 | 0.982 | 444 |
 | Bird | 0.9829 | 0.763 | 0.953 | 0.950 | 456 |
 
-**Lecture.** Le modèle dépasse la référence publiée de 0.9 point de mAP50, ce
-qui valide le pipeline sans rien prouver de plus : le jeu est facile. Deux
-observations qui orientent la suite :
+### Matrice de confusion, jeu de test
 
-- **L'écart entre mAP50 (0.988) et mAP50-95 (0.751) est le vrai signal.** Le
-  modèle trouve les objets de façon très fiable, mais ses cadres sont
-  approximatifs dès qu'on exige un recouvrement strict. C'est un défaut de
-  localisation, pas de détection.
-- **L'oiseau est la classe difficile**, avec 3 points de mAP50 de moins et un
-  rappel inférieur de 3 points. Cohérent avec le problème opérationnel : c'est
-  bien la discrimination qui coûte, pas la détection.
+|  | Vrai Bird | Vrai Drone | Vrai fond |
+|---|---|---|---|
+| **Prédit Bird** | 0.96 | 0.00 | 0.66 |
+| **Prédit Drone** | 0.00 | 0.98 | 0.34 |
+| **Prédit fond** | 0.04 | 0.02 | - |
+
+**Lecture, et c'est le résultat le plus intéressant de l'étape.**
+
+- **Aucune confusion croisée entre drone et oiseau**, sur 900 instances. Pas un
+  drone déclaré oiseau, pas un oiseau déclaré drone. La discrimination, qui est
+  le problème opérationnel du contre-drone, n'est tout simplement pas posée par
+  ce jeu de données. C'est désormais mesuré, plus supposé.
+- **Le seul mode d'erreur restant est la fausse alerte sur fond vide**, et deux
+  tiers de ces détections fantômes sont étiquetées Bird. Sur un système réel,
+  c'est cette colonne qui déclenche des alertes pour rien.
+- **4 % des oiseaux et 2 % des drones sont manqués.** Écart faible, cohérent
+  avec le léger déficit de rappel de la classe Bird.
+- **L'écart entre mAP50 (0.988) et mAP50-95 (0.751) reste le second signal.** Le
+  modèle trouve les objets de façon fiable, mais place ses cadres
+  approximativement dès qu'on exige un recouvrement strict. Défaut de
+  localisation, pas de détection. Sur un système de contre-drone, la qualité de
+  la boîte conditionne l'estimation de distance et la stabilité du suivi.
+
+Conséquence directe sur la suite : inutile de travailler la discrimination sur
+ce jeu, elle est déjà parfaite. L'étape 4 de durcissement devient obligatoire,
+pas optionnelle.
 
 Caractéristiques du modèle : 2 582 542 paramètres, 6.4 GFLOPs, 5.2 Mo en
 PyTorch, 10.1 Mo en ONNX fp32. Inférence à 4.3 ms sur T4. La mesure qui compte,

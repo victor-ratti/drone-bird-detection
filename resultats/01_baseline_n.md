@@ -65,16 +65,40 @@ métrique. Continuer à optimiser la détection serait du temps perdu.
 un système de contre-drone réel, la qualité de la boîte conditionne l'estimation
 de distance et le suivi. C'est mesurable et améliorable.
 
-**L'oiseau reste la classe faible** sur les deux métriques de comptage, avec un
-rappel de 0.950 contre 0.982 pour le drone. À croiser avec la matrice de
-confusion pour savoir si les oiseaux manqués deviennent des faux négatifs ou
-des drones déclarés. C'est la différence entre un capteur aveugle et un système
-qui tire sur des pigeons.
+**La discrimination drone / oiseau est déjà résolue, et c'est une mauvaise
+nouvelle.** La matrice de confusion sur le jeu de test ne montre aucune
+confusion croisée : zéro drone déclaré oiseau, zéro oiseau déclaré drone, sur
+900 instances.
+
+|  | Vrai Bird | Vrai Drone | Vrai fond |
+|---|---|---|---|
+| Prédit Bird | 0.96 | 0.00 | 0.66 |
+| Prédit Drone | 0.00 | 0.98 | 0.34 |
+| Prédit fond | 0.04 | 0.02 | - |
+
+Le déficit de rappel de la classe Bird (0.950 contre 0.982) ne vient donc pas
+d'oiseaux pris pour des drones, mais d'oiseaux purement manqués : 4 % passent en
+fond, contre 2 % pour les drones.
+
+Le seul mode d'erreur qui subsiste est la fausse alerte sur fond vide, et deux
+tiers de ces détections fantômes portent l'étiquette Bird.
+
+**Ce que ça implique.** L'hypothèse posée le 2026-09-07 en choisissant ce jeu
+("à 0.979 de référence, le jeu est facile et la discrimination n'y est pas le
+vrai défi") est maintenant vérifiée par la mesure. L'étape 4 de durcissement
+n'est plus une option de confort, c'est la seule façon de rendre ce projet
+intéressant.
 
 ## Suite
 
-Ne pas chercher un meilleur mAP50. Passer à l'étape 3, la compression et la
-mesure sur CPU ARM, qui est le résultat que personne n'a publié sur ce jeu.
+Ne pas chercher un meilleur mAP50, il est saturé.
+
+1. **Étape 3, compression et mesure sur CPU ARM.** Le résultat que personne n'a
+   publié sur ce jeu, et celui qui parle aux postes embarqués.
+2. **Étape 4, durcissement, désormais obligatoire.** Isoler les instances de
+   moins de 32 pixels et mesurer dessus séparément. Si la confusion croisée
+   reste nulle même sur les petits objets, il faudra changer de jeu pour
+   Anti-UAV, qui contient le cas difficile.
 
 ## Fichiers
 
