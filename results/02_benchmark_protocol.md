@@ -81,7 +81,14 @@ project uses this setting.
 **Dynamic quantization divides size by 3.55 and speed by 8.3.**
 
 A first isolated measurement gave 2016 ms, an 84x factor. It was polluted and
-did not survive the reproducibility check. Details in `03_quantization.md`.
+did not survive the reproducibility check.
+
+**A later replay contradicted even the consolidated figure.** Four fresh passes
+gave 190 to 810 ms with dispersion 4.26, against 207 to 213 ms and dispersion
+1.03 here. The dynamic model's latency is bimodal on this machine and no single
+number represents it; a range is quoted instead. The fp32 path, by contrast,
+stays within 12 % across every run of the project. Details in
+`03_quantization.md`.
 
 This is not a marginal underperformance, it is a trap. Dynamic quantization
 inserts `DynamicQuantizeLinear` operators and moves convolutions onto integer
@@ -93,6 +100,17 @@ It is designed for MatMul and LSTM, not for a Conv-dominated network like
 YOLO. Kept in the repository as a measured control, because "I tested it and
 here is by how much it misses" beats "I did not try".
 
+## A seventh rule, learned the hard way
+
+The static int8 numbers first published here were measured on a model that
+detected nothing: quantization had silently annihilated its class scores.
+Timing it produced a clean, reproducible, entirely meaningless figure.
+
+**Speed without an accuracy check is not a measurement.** Any benchmark of a
+transformed model, quantized, pruned, distilled or re-exported, must be
+preceded by an accuracy run on the same file. Added as rule 7 below. The
+mechanism and the fix are in `03_quantization.md`.
+
 ## Protocol retained
 
 1. One fresh process per measurement point. Never two models in the same one.
@@ -103,6 +121,8 @@ here is by how much it misses" beats "I did not try".
 5. Machine on mains power, heavy applications closed, load recorded.
 6. Any counter-intuitive conclusion is replayed under independent conditions
    before it is written down.
+7. Never benchmark a transformed model before checking its accuracy on the
+   same file.
 
 Superseded runs produced by the single-process harness are kept in
 `results/superseded/` for the record. None of their numbers is cited.

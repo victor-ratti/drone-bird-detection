@@ -1,15 +1,17 @@
 # Drone vs Bird: detection, edge benchmark, and audit
 
+[![tests](https://github.com/victor-ratti/drone-bird-detection/actions/workflows/tests.yml/badge.svg)](https://github.com/victor-ratti/drone-bird-detection/actions/workflows/tests.yml)
+
 Train a small detector to tell drones from birds, measure it on an ARM CPU of
 the kind a drone carries, then audit what the headline number actually means.
 
 **In three lines.** A YOLOv11 nano reaches 0.988 mAP50 on this dataset, above
-the published reference. Auditing that result shows three things: the classes
-are 76 % separable by box size alone, performance drops to 0.62 on objects
-under 32 pixels, and int8 quantization makes the model slower, not faster, on
-this ARM target. The repository documents the measurement method as carefully
-as the results, because three spectacular numbers along the way turned out to
-be artifacts.
+the published reference. Auditing that result shows the classes are 76 %
+separable by box size alone, that performance drops to 0.62 on objects under
+32 pixels, and that int8 quantization silently destroyed the model before it
+was caught and fixed. The repository documents the measurement method as
+carefully as the results, because six spectacular numbers along the way turned
+out to be artifacts.
 
 ![Predictions on a validation batch](results/01_baseline/val_batch0_pred.jpg)
 
@@ -32,7 +34,7 @@ This project addresses both, and measures both.
 | Evaluation | `src/evaluate.py` | AP50 per class with size-band filtering, on onnxruntime and numpy, no PyTorch |
 | Dataset audit | `src/analyze_sizes.py`, `src/size_bias.py` | Object-size distribution, and a no-pixel size-only classifier |
 | Benchmark | `src/benchmark.py` | CPU latency with process isolation, thread sweep, dispersion |
-| Compression | `src/quantize.py` | Static and dynamic int8 quantization with calibration |
+| Compression | `src/quantize.py` | Static and dynamic int8 quantization with calibration, detection head kept in float |
 | Tracking | `src/track.py` | ByteTrack over a video, annotated output, coverage and fragmentation stats |
 | Figures | `src/plot_size_bands.py` | AP50 by size band |
 | Tests | `tests/` | IoU, NMS, AP, letterbox mapping, tracking stats and back-projection, pinned to hand-computed values |
@@ -118,18 +120,35 @@ Measured on 2026-09-08 with 10 intra-op threads, 4 independent passes per
 model, each in a fresh process, idle machine. Protocol and measurement pitfalls
 in `results/02_benchmark_protocol.md`, analysis in `results/03_quantization.md`.
 
-| Model | Format | Size | Median | Dispersion | FPS |
-|---|---|---|---|---|---|
-| `baseline_n` | ONNX fp32 | 10.11 MB | **25.29 ms** | x1.11 | **39.5** |
-| `baseline_n` | ONNX int8 static | 3.03 MB | 39.83 ms | x1.13 | 25.1 |
-| `baseline_n` | ONNX int8 dynamic | 2.85 MB | 209.72 ms | x1.03 | 4.8 |
+| Model | Format | Size | mAP50 full | mAP50 small | Median | Dispersion | FPS |
+|---|---|---|---|---|---|---|---|
+| `baseline_n` | ONNX fp32 | 10.11 MB | **0.9814** | **0.6229** | **25.61 ms** | x1.12 | **39.1** |
+| `baseline_n` | ONNX int8 static | 3.05 MB | 0.9565 | 0.4811 | 38.99 ms | x1.05 | 25.6 |
+| `baseline_n` | ONNX int8 dynamic | 2.85 MB | 0.9833 | not measured | 190 to 810 ms | x4.26 | 2 to 5 |
 
-**The fp32 model holds real time on an ARM CPU with no accelerator**, at 39.5
+**The fp32 model holds real time on an ARM CPU with no accelerator**, at 39.1
 frames per second.
 
 **Int8 quantization does not speed this model up on this target, it slows it
-down.** Static: 1.57x slower. Dynamic: 8.3x. The size gain is real, a factor
-3.34.
+down.** Static: 1.52x slower. Dynamic: erratic, bimodal between roughly 200 and
+800 ms across passes, so a range is quoted rather than a figure. The size gain
+is real, a factor 3.31.
+
+**And static quantization first destroyed the model outright.** Its class
+scores collapsed to exactly zero, mAP50 0.0000, every one of 900 objects
+missed, while the box coordinates stayed intact. Cause, read off the graph: a
+YOLO export ends with a `Concat` merging box coordinates in pixels (0 to 640)
+with class probabilities (0 to 1), and per-tensor quantization gave that
+concatenation a single scale of 2.53. In uint8 the smallest representable
+non-zero value is then larger than any probability. Keeping three head nodes in
+floating point fixes it at no speed cost, 38.99 against 39.06 ms. Full account
+in `results/03_quantization.md`.
+
+**Accuracy after the fix costs 2.5 points overall, but 14 on small objects**:
+0.9814 to 0.9565 on the full split, 0.6229 to 0.4811 under 32 pixels, a 23 %
+relative drop. Compression takes its price where the model was already
+weakest, which is where the operational case lives. Dynamic quantization, which
+only touches weights, costs nothing in accuracy and everything in speed.
 
 The cause is not the model but the backend: onnxruntime's fp32 path uses NEON
 kernels tuned for ARM64, while the default CPU executor's int8 path has no
@@ -179,12 +198,13 @@ of the five videos found were edited documentaries, useless as benchmarks;
 the harness gained `--start` and `--end` to isolate one continuous shot.
 
 Tracking adds under 1 ms per frame. At 1080p, decoding and letterboxing cost as
-much as the network: 22 FPS end to end, against 39.5 FPS for inference alone.
+much as the network: 22 FPS end to end, against 39.1 FPS for inference alone.
 
 ## Measurement method
 
-Three spectacular results in this project turned out to be artifacts. Each was
-caught by a reproducibility check, not by a better explanation.
+Six spectacular results in this project turned out to be artifacts. Five were
+caught by a reproducibility check rather than by a better explanation; the
+sixth by measuring something the benchmark could not see.
 
 1. **A thread sweep showing non-monotonic latency and an 8x penalty at 12
    threads.** onnxruntime does not release thread pools between sessions; the
@@ -199,6 +219,14 @@ caught by a reproducibility check, not by a better explanation.
    track. And the first tracking runs pre-filtered detections at the
    tracker's own activation threshold, disabling the low-score recovery that
    is the point of ByteTrack. Both fixed before any number was written down.
+5. **A quantized model timed at a clean, reproducible 39.8 ms while detecting
+   nothing.** Static int8 had annihilated every class score; the file loaded,
+   ran, and returned well-formed tensors. No reproducibility check could have
+   found it, only an accuracy run. Rule added to the protocol: never benchmark
+   a transformed model before checking its accuracy on the same file.
+6. **A dynamic-quantization latency of 209.72 ms with 3 % dispersion**, which a
+   later replay contradicted at 190 to 810 ms with 326 % dispersion. That path
+   is bimodal on this machine; the README quotes a range, not a number.
 
 Superseded runs are kept in `results/superseded/` for the record. None of
 their numbers is cited.
@@ -234,15 +262,19 @@ in the hardening section.
 
 - [x] **Detection.** YOLOv11n, mAP50 0.9878 on the test split, above the
       published reference.
-- [x] **Compression.** Static and dynamic int8 measured on ARM CPU. Negative
-      result, cause identified: the backend, not the model.
+- [x] **Compression.** Static and dynamic int8 measured on ARM CPU, accuracy
+      included. Negative result on speed, cause identified: the backend, not
+      the model.
 - [x] **Hardening.** mAP50 from 0.981 to 0.623 under 32 px, Bird at 0.382.
       Scale bias of 5.72 between classes; a size threshold alone reaches
       76.1 %.
 - [x] **Tracking.** ByteTrack over two continuous shots. Low-score recovery
       turns 2 ids into 1 on a hovering drone; it cannot re-identify a hawk
       that leaves the frame between passes.
-- [ ] **Accuracy of the static int8 model.** One `evaluate.py` run away.
+- [x] **Accuracy of the quantized models.** Static int8 first scored 0.0000, a
+      silent failure traced to a single quantization scale over a tensor mixing
+      pixels and probabilities. Fixed; it now costs 2.5 points overall and 14
+      on small objects. Dynamic int8 costs nothing in accuracy.
 - [ ] **Anti-UAV.** Rerun the three hardening measurements on a dataset that
       contains the hard case, and compute MOTA and IDF1 on its annotated
       sequences.
@@ -306,7 +338,8 @@ drone-bird-detection/
 ├── notebooks/     training, runs on Google Colab
 ├── src/           evaluation, audit, benchmark and quantization scripts, run locally
 ├── tests/         unit tests on the evaluator core
-├── models/        exported ONNX models, fp32 and both int8 variants
+├── models/        exported ONNX: fp32, both int8 variants, and the broken
+│                   head-quantized file kept as evidence
 ├── results/       training figures, evaluation and benchmark JSON, step write-ups
 │   ├── figures/       generated charts
 │   └── superseded/    runs from the flawed harness, kept for the record

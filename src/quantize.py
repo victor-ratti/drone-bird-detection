@@ -66,6 +66,40 @@ def output_path(model, suffix):
     return f"{base}_{suffix}.onnx"
 
 
+def head_nodes_to_exclude(path):
+    """Nodes at the graph tail that must not be quantized.
+
+    A YOLO ONNX export ends with a Concat that merges two branches of
+    incompatible nature: box coordinates in pixels (0 to 640) and class
+    probabilities out of a Sigmoid (0 to 1). Per-tensor quantization gives that
+    concatenation a single scale, driven by the pixel range: about 640/255 =
+    2.51. In uint8 with zero_point 0, the smallest representable non-zero value
+    is then larger than any probability, and every class score collapses to
+    exactly 0. Boxes survive, scores do not, and the model silently detects
+    nothing.
+
+    Measured on 2026-09-08: scale 2.530844 on the output tensor, mAP50 0.0000
+    with every one of 900 objects missed, while box coordinates matched fp32.
+
+    This walks back from each graph output and returns that Concat plus its
+    direct producers, so they stay in floating point.
+    """
+    import onnx
+    model = onnx.load(path)
+    producer = {o: n for n in model.graph.node for o in n.output}
+    excluded = []
+    for out in model.graph.output:
+        tail = producer.get(out.name)
+        if tail is None:
+            continue
+        excluded.append(tail.name)
+        for inp in tail.input:
+            up = producer.get(inp)
+            if up is not None:
+                excluded.append(up.name)
+    return [n for n in dict.fromkeys(excluded) if n]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -74,6 +108,10 @@ def main():
     ap.add_argument("--calibration", help="image folder, required for static")
     ap.add_argument("--n", type=int, default=200, help="calibration images")
     ap.add_argument("--output")
+    ap.add_argument("--quantize-head", action="store_true",
+                    help="also quantize the detection head tail. Off by default: "
+                         "it collapses every class score to zero, see "
+                         "head_nodes_to_exclude()")
     args = ap.parse_args()
 
     if not os.path.exists(args.model):
@@ -98,6 +136,9 @@ def main():
         input_name = ort.InferenceSession(
             prepared, providers=["CPUExecutionProvider"]).get_inputs()[0].name
         print("Static quantization, weights and activations")
+        exclude = [] if args.quantize_head else head_nodes_to_exclude(prepared)
+        if exclude:
+            print(f"  keeping the head in float: {', '.join(exclude)}")
         reader = CalibrationReader(args.calibration, input_name, args.n)
         quantize_static(
             prepared, out, reader,
@@ -105,6 +146,7 @@ def main():
             activation_type=QuantType.QUInt8,
             weight_type=QuantType.QInt8,
             per_channel=True,
+            nodes_to_exclude=exclude,
         )
 
     os.remove(prepared)

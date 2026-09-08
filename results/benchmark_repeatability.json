@@ -1,42 +1,54 @@
 {
-  "protocol": "10 intra-op threads, 60 runs per pass, 4 independent passes, each pass in a fresh process, idle machine, 2026-09-08",
+  "protocol": "10 intra-op threads, 60 runs per pass, 4 independent passes, each pass in a fresh process, idle machine, 2026-09-08, after the detection-head quantization fix",
   "machine": "Snapdragon X Elite X1E80100, 12 cores, Windows 11 ARM64, onnxruntime 1.29.0",
   "models": {
     "baseline_best.onnx": {
       "size_mb": 10.11,
       "passes_ms": [
-        24.0,
-        24.9,
-        25.8,
-        26.6
+        24.59,
+        25.02,
+        26.19,
+        27.61
       ],
-      "median_of_passes_ms": 25.29,
-      "dispersion": 1.11,
-      "fps": 39.5
+      "median_of_passes_ms": 25.61,
+      "dispersion": 1.12,
+      "fps": 39.1
     },
     "baseline_best_int8_static.onnx": {
+      "size_mb": 3.05,
+      "passes_ms": [
+        38.0,
+        38.91,
+        40.05,
+        39.08
+      ],
+      "median_of_passes_ms": 38.99,
+      "dispersion": 1.05,
+      "fps": 25.6
+    },
+    "baseline_best_int8_static_head_quantized.onnx": {
       "size_mb": 3.03,
       "passes_ms": [
-        37.6,
-        38.7,
-        40.7,
-        42.4
+        40.73,
+        38.25,
+        38.46,
+        39.67
       ],
-      "median_of_passes_ms": 39.83,
-      "dispersion": 1.13,
-      "fps": 25.1
+      "median_of_passes_ms": 39.06,
+      "dispersion": 1.06,
+      "fps": 25.6
     },
     "baseline_best_int8_dynamic.onnx": {
       "size_mb": 2.85,
       "passes_ms": [
-        207.1,
-        210.5,
-        212.9,
-        208.4
+        808.51,
+        781.77,
+        189.63,
+        214.08
       ],
-      "median_of_passes_ms": 209.72,
-      "dispersion": 1.03,
-      "fps": 4.8
+      "median_of_passes_ms": 497.93,
+      "dispersion": 4.26,
+      "fps": 2.0
     }
   }
 }

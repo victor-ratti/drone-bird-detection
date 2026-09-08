@@ -1,0 +1,30 @@
+{
+  "model": "baseline_best_int8_static.onnx",
+  "split": "test",
+  "iou": 0.5,
+  "max_side": 32.0,
+  "min_side": null,
+  "map50": 0.4811,
+  "per_class": {
+    "Bird": {
+      "ap50": 0.2183,
+      "objects": 13
+    },
+    "Drone": {
+      "ap50": 0.7439,
+      "objects": 76
+    }
+  },
+  "confusion": [
+    [
+      4,
+      0,
+      9
+    ],
+    [
+      0,
+      59,
+      17
+    ]
+  ]
+}
