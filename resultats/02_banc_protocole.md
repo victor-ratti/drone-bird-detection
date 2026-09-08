@@ -73,12 +73,16 @@ du projet sont faites à ce réglage.
 
 10 threads, 100 passes, processus isolés :
 
-| Modèle | Taille | Médiane | p90 | FPS |
-|---|---|---|---|---|
-| fp32 | 10.11 Mo | 23.97 ms | 24.65 ms | 41.7 |
-| int8 dynamique | 2.85 Mo | 2016.79 ms | 2276.10 ms | 0.5 |
+| Modèle | Taille | Médiane | FPS |
+|---|---|---|---|
+| fp32 | 10.11 Mo | 25.29 ms | 39.5 |
+| int8 dynamique | 2.85 Mo | 209.72 ms | 4.8 |
 
-**La quantification dynamique divise la taille par 3,55 et la vitesse par 84.**
+**La quantification dynamique divise la taille par 3,55 et la vitesse par 8,3.**
+
+Valeurs consolidees sur 4 passes independantes. Une premiere mesure isolee
+donnait 2016 ms, soit un facteur 84 : elle etait polluee, et n'a pas resiste au
+controle de reproductibilite. Detail dans `03_quantification.md`.
 
 Ce n'est pas une contre-performance marginale, c'est un piège. La quantification
 dynamique insère des opérateurs `DynamicQuantizeLinear` et bascule les

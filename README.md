@@ -71,26 +71,35 @@ sur CPU ARM, arrive à l'étape 3.
 
 ### Vitesse et taille
 
-Mesures du 2026-09-08, 10 threads intra-op, 100 passes, un processus par
-modèle. Voir `resultats/02_banc_protocole.md` pour le protocole et pour
-l'erreur de méthode qui a failli fausser cette table.
+Mesures du 2026-09-08, 10 threads intra-op, 4 passes indépendantes par modèle,
+chacune dans un processus neuf, machine au repos. Protocole et pièges de mesure
+dans `resultats/02_banc_protocole.md`, analyse dans `resultats/03_quantification.md`.
 
-| Modèle | Format | Taille | Médiane | p90 | FPS |
+| Modèle | Format | Taille | Médiane | Dispersion | FPS |
 |---|---|---|---|---|---|
-| `baseline_n` | ONNX fp32 | 10.11 Mo | **23.97 ms** | 24.65 ms | **41.7** |
-| `baseline_n` | ONNX int8 dynamique | 2.85 Mo | 2016.79 ms | 2276.10 ms | 0.5 |
-| `baseline_n` | ONNX int8 statique | à venir | | | |
+| `baseline_n` | ONNX fp32 | 10.11 Mo | **25.29 ms** | x1.11 | **39.5** |
+| `baseline_n` | ONNX int8 statique | 3.03 Mo | 39.83 ms | x1.13 | 25.1 |
+| `baseline_n` | ONNX int8 dynamique | 2.85 Mo | 209.72 ms | x1.03 | 4.8 |
 
-**Le modèle fp32 tient déjà le temps réel sur CPU ARM**, sans accélérateur, à
-41.7 images par seconde.
+**Le modèle fp32 tient le temps réel sur CPU ARM sans accélérateur**, à 39.5
+images par seconde.
 
-**La quantification dynamique est un piège sur ce type de réseau** : taille
-divisée par 3.55, vitesse divisée par 84. Elle bascule les convolutions sur des
-noyaux entiers sans implémentation optimisée en ARM64, et requantifie les
-activations à chaque inférence. Elle vise les MatMul et les LSTM, pas les Conv.
-Conservée comme témoin mesuré.
+**La quantification int8 n'accélère pas ce modèle sur cette cible, elle le
+ralentit.** Statique : 1.57 fois plus lent. Dynamique : 8.3 fois. Le gain de
+taille est en revanche réel, facteur 3.34.
 
-Le nombre de threads compte autant que le modèle : 1 thread donne 330 ms, 10
+La cause n'est pas le modèle mais le backend : le chemin fp32 d'onnxruntime
+passe par des noyaux NEON optimisés pour ARM64, le chemin int8 de l'exécuteur
+CPU par défaut n'a pas d'équivalent aussi abouti et retombe sur des
+implémentations génériques.
+
+**Conclusion transposable à un déploiement embarqué : le choix du backend
+précède le choix du format de poids.** Quantifier avant de savoir ce que le
+runtime cible sait exécuter est une perte de temps. Le gain existerait sur le
+NPU via l'execution provider QNN, sur XNNPACK, ou sur une cible Jetson en
+TensorRT.
+
+Le nombre de threads compte autant que le modèle : 1 thread donne 331 ms, 10
 threads en donnent 24. Sur le calculateur d'un drone, ce réglage est une
 décision de déploiement, pas un détail.
 
