@@ -1,162 +1,178 @@
-# Drone vs Bird : détection, suivi et compression pour l'edge
+# Drone vs Bird: detection, edge benchmark, and audit
 
-Détecter et distinguer drones et oiseaux dans des images, puis faire tenir le
-modèle sur un ordinateur faible, du type de ceux qu'un drone embarque.
+Train a small detector to tell drones from birds, measure it on an ARM CPU of
+the kind a drone carries, then audit what the headline number actually means.
 
-> Projet en cours. Les chiffres ci-dessous sont mis à jour au fil des étapes.
+**In three lines.** A YOLOv11 nano reaches 0.988 mAP50 on this dataset, above
+the published reference. Auditing that result shows three things: the classes
+are 76 % separable by box size alone, performance drops to 0.62 on objects
+under 32 pixels, and int8 quantization makes the model slower, not faster, on
+this ARM target. The repository documents the measurement method as carefully
+as the results, because three spectacular numbers along the way turned out to
+be artifacts.
 
-**Résumé en trois lignes.** Un YOLOv11 nano atteint 0.988 de mAP50 sur ce jeu,
-mieux que la référence publiée. En auditant ce résultat, trois choses
-apparaissent : les classes sont séparables à 76 % par la seule taille des
-boîtes, la performance tombe à 0.62 sur les objets de moins de 32 pixels, et
-la quantification int8 ralentit le modèle au lieu de l'accélérer sur cette
-cible ARM. Le dépôt documente autant la méthode de mesure que les résultats,
-parce que trois mesures spectaculaires s'y sont révélées être des artefacts.
+![Predictions on a validation batch](results/01_baseline/val_batch0_pred.jpg)
 
-## Le problème
+## The problem
 
-Un système de détection de drones doit répondre à deux contraintes en même
-temps :
+A drone detection system has to satisfy two constraints at once:
 
-1. **Ne pas confondre un drone avec un oiseau.** Une fausse alerte sur chaque
-   pigeon rend le système inutilisable.
-2. **Tourner sur du matériel contraint.** Le calcul se fait à bord ou dans un
-   boîtier sur le terrain, pas dans un centre de données.
+1. **Do not mistake a bird for a drone.** A false alarm on every pigeon makes
+   the system unusable.
+2. **Run on constrained hardware.** Inference happens on board or in a field
+   box, not in a data center.
 
-Ce projet traite les deux, et mesure les deux.
+This project addresses both, and measures both.
 
-## Résultats
+## What is in the repository
 
-### Détection
+| Stage | Where | What it does |
+|---|---|---|
+| Training | `notebooks/01_training_colab.ipynb` | Fine-tunes YOLOv11n on Google Colab (free T4), exports ONNX |
+| Evaluation | `src/evaluate.py` | AP50 per class with size-band filtering, on onnxruntime and numpy, no PyTorch |
+| Dataset audit | `src/analyze_sizes.py`, `src/size_bias.py` | Object-size distribution, and a no-pixel size-only classifier |
+| Benchmark | `src/benchmark.py` | CPU latency with process isolation, thread sweep, dispersion |
+| Compression | `src/quantize.py` | Static and dynamic int8 quantization with calibration |
+| Figures | `src/plot_size_bands.py` | AP50 by size band |
+| Tests | `tests/` | IoU, NMS, AP arithmetic and letterbox mapping pinned to hand-computed values |
 
-Étape 1 terminée le 2026-09-08. YOLOv11 nano, 50 époques, 1 h 33 sur un T4.
+The model is the specimen. The evaluator and the benchmark harness are the
+instruments, and most of the work went into making the instruments
+trustworthy.
 
-| Modèle | Jeu | mAP50 | mAP50-95 | Précision | Rappel |
+## Results
+
+### Detection
+
+YOLOv11 nano, 50 epochs, 1 h 33 on a T4. Details in `results/01_baseline.md`.
+
+| Model | Split | mAP50 | mAP50-95 | Precision | Recall |
 |---|---|---|---|---|---|
-| Référence publiée (YOLOv11n) | test | 0.979 | - | - | - |
+| Published reference (YOLOv11n) | test | 0.979 | - | - | - |
 | **`baseline_n`** | **test** | **0.9878** | **0.7505** | **0.968** | **0.966** |
 | `baseline_n` | validation | 0.975 | 0.758 | 0.968 | 0.955 |
 
-Par classe, sur le jeu de test :
+Per class on the test split:
 
-| Classe | mAP50 | mAP50-95 | Précision | Rappel | Instances |
+| Class | mAP50 | mAP50-95 | Precision | Recall | Instances |
 |---|---|---|---|---|---|
 | Drone | 0.9928 | 0.738 | 0.984 | 0.982 | 444 |
 | Bird | 0.9829 | 0.763 | 0.953 | 0.950 | 456 |
 
-### Matrice de confusion, jeu de test
+<img src="results/01_baseline_test/confusion_matrix_normalized.png" alt="Normalized confusion matrix on the test split" width="520">
 
-|  | Vrai Bird | Vrai Drone | Vrai fond |
+**Reading.**
+
+- **Cross-confusion between drone and bird is essentially null.** Ultralytics'
+  matrix rounds both off-diagonal cells to 0.00; the repository's own
+  evaluator finds 2 birds predicted as drones out of 456, and 0 drones
+  predicted as birds out of 444. The discrimination problem, which is the
+  operational problem of counter-drone work, is simply not posed by this
+  dataset. That is measured, no longer assumed.
+- **The only remaining error mode is the false alarm on empty background**,
+  and two thirds of those phantom detections carry the Bird label. On a real
+  system, that column is what triggers alerts for nothing.
+- **4 % of birds and 2 % of drones are missed.** Small gap, consistent with the
+  slight recall deficit on Bird.
+- **The gap between mAP50 (0.988) and mAP50-95 (0.751) is the second signal.**
+  The model finds objects reliably but places its boxes loosely once strict
+  overlap is required. A localization defect, not a detection one. On a
+  counter-drone system, box quality drives range estimation and tracking
+  stability.
+
+### Hardening: where the 0.98 lies
+
+The headline number mostly measures the easy case. Three independent
+measurements show it, details in `results/04_hardening.md`.
+
+**The classes are largely separable by size.** Median side of a bird: 378 px.
+Of a drone: 66 px. Ratio 5.72. A single-threshold classifier on box size,
+**without looking at a single pixel**, reaches 76.1 % accuracy against 50.7 %
+at chance. A quarter of the job is handed over by the dataset's statistics.
+
+**Performance collapses on small objects.** Annotations and predictions
+filtered by the same size band.
+
+| Band | Bird AP50 | Drone AP50 | mAP50 |
 |---|---|---|---|
-| **Prédit Bird** | 0.96 | 0.00 | 0.66 |
-| **Prédit Drone** | 0.00 | 0.98 | 0.34 |
-| **Prédit fond** | 0.04 | 0.02 | - |
+| Small, < 32 px | **0.3824** (13 obj.) | 0.8634 (76) | **0.6229** |
+| Medium, 32 to 96 px | 0.8047 (95) | 0.9215 (233) | 0.8631 |
+| Large, >= 96 px | 0.9957 (348) | 0.9478 (135) | 0.9718 |
+| Full test split | 0.9736 (456) | 0.9892 (444) | 0.9814 |
 
-**Lecture, et c'est le résultat le plus intéressant de l'étape.**
+![AP50 by object-size band](results/figures/ap_by_size_band.png)
 
-- **Aucune confusion croisée entre drone et oiseau**, sur 900 instances. Pas un
-  drone déclaré oiseau, pas un oiseau déclaré drone. La discrimination, qui est
-  le problème opérationnel du contre-drone, n'est tout simplement pas posée par
-  ce jeu de données. C'est désormais mesuré, plus supposé.
-- **Le seul mode d'erreur restant est la fausse alerte sur fond vide**, et deux
-  tiers de ces détections fantômes sont étiquetées Bird. Sur un système réel,
-  c'est cette colonne qui déclenche des alertes pour rien.
-- **4 % des oiseaux et 2 % des drones sont manqués.** Écart faible, cohérent
-  avec le léger déficit de rappel de la classe Bird.
-- **L'écart entre mAP50 (0.988) et mAP50-95 (0.751) reste le second signal.** Le
-  modèle trouve les objets de façon fiable, mais place ses cadres
-  approximativement dès qu'on exige un recouvrement strict. Défaut de
-  localisation, pas de détection. Sur un système de contre-drone, la qualité de
-  la boîte conditionne l'estimation de distance et la stabilité du suivi.
+**mAP50 goes from 0.981 to 0.623 on small objects, and the Bird class falls to
+0.382.** Birds in this dataset are almost always large, so the model never
+learned to recognize a small bird.
 
-Conséquence directe sur la suite : inutile de travailler la discrimination sur
-ce jeu, elle est déjà parfaite. L'étape 4 de durcissement devient obligatoire,
-pas optionnelle.
+**And the dataset does not contain the hard case**: 13 small birds in the
+whole test split. The operational counter-drone problem, telling a small
+flying object from a bird at range, is represented neither in quantity nor in
+difficulty.
 
-### Durcissement : où le 0.98 ment
+### Speed and size on ARM CPU
 
-Le chiffre de tête mesure surtout le cas facile. Trois mesures indépendantes le
-montrent, détail dans `resultats/04_durcissement.md`.
+Measured on 2026-09-08 with 10 intra-op threads, 4 independent passes per
+model, each in a fresh process, idle machine. Protocol and measurement pitfalls
+in `results/02_benchmark_protocol.md`, analysis in `results/03_quantization.md`.
 
-**Les classes sont largement séparables par la taille.** Côté médian d'un
-oiseau : 378 px. D'un drone : 66 px. Rapport 5.72. Un classifieur à un seuil
-unique sur la taille de la boîte, **sans regarder un seul pixel**, atteint
-76.1 % d'exactitude, contre 50.7 % au hasard. Un quart du travail est offert par
-la statistique du jeu.
-
-**La performance s'effondre sur les petits objets.** Annotations et prédictions
-filtrées par la même bande de taille.
-
-| Bande | Bird AP50 | Drone AP50 | mAP50 |
-|---|---|---|---|
-| Petits, < 32 px | **0.3824** (13 obj.) | 0.8634 (76) | **0.6229** |
-| Moyens, 32 à 96 px | 0.8047 (95) | 0.9215 (233) | 0.8631 |
-| Grands, >= 96 px | 0.9957 (348) | 0.9478 (135) | 0.9718 |
-| Jeu complet | 0.9736 (456) | 0.9892 (444) | 0.9814 |
-
-**Le mAP50 passe de 0.981 à 0.623 sur les petits objets, et la classe Bird tombe
-à 0.382.** Les oiseaux du jeu étant presque toujours grands, le modèle n'a
-jamais appris à reconnaître un petit oiseau.
-
-**Et le jeu ne contient pas le cas difficile** : 13 petits oiseaux dans tout le
-jeu de test. Le problème opérationnel du contre-drone, distinguer à distance un
-petit objet volant d'un oiseau, n'est représenté ni en quantité ni en
-difficulté.
-
-Suite : rejouer les trois mêmes mesures sur Anti-UAV, qui contient des séquences
-de petits objets à distance. Le pipeline complet se rejoue tel quel.
-
-Caractéristiques du modèle : 2 582 542 paramètres, 6.4 GFLOPs, 5.2 Mo en
-PyTorch, 10.1 Mo en ONNX fp32. Inférence à 4.3 ms sur T4. La mesure qui compte,
-sur CPU ARM, arrive à l'étape 3.
-
-### Vitesse et taille
-
-Mesures du 2026-09-08, 10 threads intra-op, 4 passes indépendantes par modèle,
-chacune dans un processus neuf, machine au repos. Protocole et pièges de mesure
-dans `resultats/02_banc_protocole.md`, analyse dans `resultats/03_quantification.md`.
-
-| Modèle | Format | Taille | Médiane | Dispersion | FPS |
+| Model | Format | Size | Median | Dispersion | FPS |
 |---|---|---|---|---|---|
-| `baseline_n` | ONNX fp32 | 10.11 Mo | **25.29 ms** | x1.11 | **39.5** |
-| `baseline_n` | ONNX int8 statique | 3.03 Mo | 39.83 ms | x1.13 | 25.1 |
-| `baseline_n` | ONNX int8 dynamique | 2.85 Mo | 209.72 ms | x1.03 | 4.8 |
+| `baseline_n` | ONNX fp32 | 10.11 MB | **25.29 ms** | x1.11 | **39.5** |
+| `baseline_n` | ONNX int8 static | 3.03 MB | 39.83 ms | x1.13 | 25.1 |
+| `baseline_n` | ONNX int8 dynamic | 2.85 MB | 209.72 ms | x1.03 | 4.8 |
 
-**Le modèle fp32 tient le temps réel sur CPU ARM sans accélérateur**, à 39.5
-images par seconde.
+**The fp32 model holds real time on an ARM CPU with no accelerator**, at 39.5
+frames per second.
 
-**La quantification int8 n'accélère pas ce modèle sur cette cible, elle le
-ralentit.** Statique : 1.57 fois plus lent. Dynamique : 8.3 fois. Le gain de
-taille est en revanche réel, facteur 3.34.
+**Int8 quantization does not speed this model up on this target, it slows it
+down.** Static: 1.57x slower. Dynamic: 8.3x. The size gain is real, a factor
+3.34.
 
-La cause n'est pas le modèle mais le backend : le chemin fp32 d'onnxruntime
-passe par des noyaux NEON optimisés pour ARM64, le chemin int8 de l'exécuteur
-CPU par défaut n'a pas d'équivalent aussi abouti et retombe sur des
-implémentations génériques.
+The cause is not the model but the backend: onnxruntime's fp32 path uses NEON
+kernels tuned for ARM64, while the default CPU executor's int8 path has no
+equally mature equivalent and falls back to generic implementations.
 
-**Conclusion transposable à un déploiement embarqué : le choix du backend
-précède le choix du format de poids.** Quantifier avant de savoir ce que le
-runtime cible sait exécuter est une perte de temps. Le gain existerait sur le
-NPU via l'execution provider QNN, sur XNNPACK, ou sur une cible Jetson en
-TensorRT.
+**Conclusion that carries over to embedded deployment: the choice of backend
+precedes the choice of weight format.** Quantizing before knowing what the
+target runtime can execute is wasted time. The gain would exist on the NPU via
+the QNN execution provider, on XNNPACK, or on a Jetson target with TensorRT.
 
-Le nombre de threads compte autant que le modèle : 1 thread donne 331 ms, 10
-threads en donnent 24. Sur le calculateur d'un drone, ce réglage est une
-décision de déploiement, pas un détail.
+Thread count matters as much as the model: 1 thread gives 331 ms, 10 threads
+give 24. On a drone's compute board, that setting is a deployment decision,
+not a detail.
 
-Machine de mesure : Snapdragon X Elite X1E80100, 12 coeurs, Windows ARM64,
-sans GPU dédié. Choix volontaire : cette architecture est proche de celle des
-calculateurs embarqués sur drone, bien plus qu'une carte graphique de bureau.
+Measurement machine: Snapdragon X Elite X1E80100, 12 cores, Windows 11 ARM64,
+no discrete GPU. Deliberate choice: this architecture is closer to the compute
+boards drones carry than a desktop graphics card is.
 
-## Données
+## Measurement method
+
+Three spectacular results in this project turned out to be artifacts. Each was
+caught by a reproducibility check, not by a better explanation.
+
+1. **A thread sweep showing non-monotonic latency and an 8x penalty at 12
+   threads.** onnxruntime does not release thread pools between sessions; the
+   harness was measuring its own leak. Fix: one fresh process per measurement.
+2. **Dynamic quantization measured 84x slower.** A polluted run. Replayed over
+   four independent passes: 8.3x.
+3. **mAP50 of 0.098 on small objects.** Only annotations were size-filtered,
+   not predictions, so every correct large detection counted as a false
+   positive. The confusion matrix, computed differently, contradicted it.
+
+Superseded runs are kept in `results/superseded/` for the record. None of
+their numbers is cited.
+
+## Dataset
 
 [Drone-Bird-Detection](https://universe.roboflow.com/myworkspace-0p4nk/drone-bird-detection-3nl79),
-version 3 `drone-bird-nonaugmented`, publiée sur Roboflow Universe sous licence
-CC BY 4.0.
+version 3 `drone-bird-nonaugmented`, published on Roboflow Universe under
+CC BY 4.0. Not redistributed here; `src/download_data.py` fetches it.
 
-- 7737 images, réparties en 5418 entraînement / 1547 validation / 772 test
-- Deux classes : `Bird`, `Drone`
-- Aucune augmentation appliquée en amont, donc pas de fuite entre les jeux
+- 7737 images, split 5418 train / 1547 validation / 772 test
+- Two classes: `Bird`, `Drone`
+- No augmentation applied upstream, so no leakage between splits
 
 ```
 @misc{ drone-bird-detection-3nl79_dataset,
@@ -170,45 +186,112 @@ CC BY 4.0.
 }
 ```
 
-**Limite connue du jeu.** La référence publiée atteint 0.979 de mAP50, ce qui
-indique un jeu facile : les objets sont grands et nets dans l'image. La
-discrimination drone / oiseau à longue distance, qui est le vrai problème
-opérationnel, n'y est pas représentée. Traité à l'étape 4 en isolant un
-sous-ensemble de petits objets et en mesurant dessus séparément.
+**Known limit.** The published reference reaches 0.979 mAP50, which indicates
+an easy dataset: objects are large and sharp. Long-range drone / bird
+discrimination, the real operational problem, is not represented. Quantified
+in the hardening section.
 
-## Étapes
+## Status
 
-- [x] **1. Détection.** YOLOv11 nano, mAP50 = 0.9878 sur le jeu de test. Fait le 2026-09-08.
-- [ ] **2. Suivi.** Relier les détections entre images (ByteTrack), mesurer le
-      taux de perte de piste sur des vidéos.
-- [ ] **3. Compression.** Export ONNX, quantification int8, mesure de la
-      latence CPU avant et après, à dégradation de précision mesurée.
-- [x] **4. Durcissement.** mAP50 de 0.981 à 0.623 sur les objets de moins de
-      32 px, Bird à 0.382. Biais d'échelle de 5.72 entre les classes, un seuil
-      de taille seul atteint 76.1 %. Fait le 2026-09-08.
-- [ ] **5. Rejouer sur Anti-UAV**, qui contient le cas difficile absent ici.
+- [x] **Detection.** YOLOv11n, mAP50 0.9878 on the test split, above the
+      published reference.
+- [x] **Compression.** Static and dynamic int8 measured on ARM CPU. Negative
+      result, cause identified: the backend, not the model.
+- [x] **Hardening.** mAP50 from 0.981 to 0.623 under 32 px, Bird at 0.382.
+      Scale bias of 5.72 between classes; a size threshold alone reaches
+      76.1 %.
+- [ ] **Accuracy of the static int8 model.** One `evaluate.py` run away.
+- [ ] **Tracking.** ByteTrack over a video sequence, track-loss rate as the
+      metric. Closes the "detect and track" loop.
+- [ ] **Anti-UAV.** Rerun the three hardening measurements on a dataset that
+      contains the hard case.
+- [ ] **NPU.** onnxruntime-qnn on the Snapdragon, where int8 should pay off.
 
-## Organisation du dépôt
+## Reproduce
+
+### Training, on Google Colab
+
+1. Open `notebooks/01_training_colab.ipynb` in Colab.
+2. Enable the T4 GPU: `Runtime` > `Change runtime type`.
+3. Paste a Roboflow API key in cell 3.
+4. Run the cells top to bottom. Cell 8 downloads a zip with weights and figures.
+
+### Measurement, locally on CPU
+
+Tested on Windows 11 ARM64 with Python 3.14. Any platform with onnxruntime
+wheels should work.
+
+```bash
+python -m venv .venv
+.venv/Scripts/python -m pip install -r requirements.txt     # .venv/bin/python on Linux and macOS
+```
+
+```bash
+# tests on the evaluator's arithmetic
+.venv/Scripts/python -m pytest tests -q
+
+# dataset (put ROBOFLOW_API_KEY=... in a .env file at the project root first)
+.venv/Scripts/python src/download_data.py
+
+# accuracy, full split then small objects only
+.venv/Scripts/python src/evaluate.py models/baseline_best.onnx data/Drone-Bird-Detection-3
+.venv/Scripts/python src/evaluate.py models/baseline_best.onnx data/Drone-Bird-Detection-3 --max-side 32
+
+# dataset audit
+.venv/Scripts/python src/analyze_sizes.py data/Drone-Bird-Detection-3
+.venv/Scripts/python src/size_bias.py data/Drone-Bird-Detection-3
+
+# latency, fp32 against both int8 variants, and a thread sweep
+.venv/Scripts/python src/benchmark.py models/*.onnx --threads 10
+.venv/Scripts/python src/benchmark.py models/baseline_best.onnx --sweep 1,2,4,8,12
+
+# rebuild the quantized models
+.venv/Scripts/python src/quantize.py models/baseline_best.onnx --mode dynamic
+.venv/Scripts/python src/quantize.py models/baseline_best.onnx --mode static \
+    --calibration data/Drone-Bird-Detection-3/valid/images --n 200
+```
+
+Latency numbers will differ on another machine. The protocol in
+`results/02_benchmark_protocol.md` is what transfers.
+
+## Repository layout
 
 ```
 drone-bird-detection/
-├── notebooks/     entraînement, tourne sur Google Colab (GPU gratuit)
-├── src/           scripts de mesure, tournent en local sur CPU
-├── modeles/       poids exportés, .pt et .onnx
-├── resultats/     courbes, matrices de confusion, tableaux de mesure
-└── data/          jeu de données, non versionné
+├── notebooks/     training, runs on Google Colab
+├── src/           evaluation, audit, benchmark and quantization scripts, run locally
+├── tests/         unit tests on the evaluator core
+├── models/        exported ONNX models, fp32 and both int8 variants
+├── results/       training figures, evaluation and benchmark JSON, step write-ups
+│   ├── figures/       generated charts
+│   └── superseded/    runs from the flawed harness, kept for the record
+└── data/          dataset, not versioned
 ```
 
-L'entraînement se fait sur Colab faute de GPU NVIDIA en local. La mesure de
-vitesse se fait en local, et c'est volontaire : voir la section Résultats.
+## With one more month
 
-## Reproduire
+In order of expected return.
 
-1. Ouvrir `notebooks/01_entrainement_colab.ipynb` dans Google Colab.
-2. Activer le GPU T4 : `Exécution` > `Modifier le type d'exécution`.
-3. Renseigner sa clé API Roboflow dans la cellule 3.
-4. Exécuter les cellules de haut en bas.
+1. **Rerun the audit on Anti-UAV.** The size-band evaluator and the
+   size-only classifier are the two tools that expose a dataset's real
+   difficulty. Running them on a set that contains small, distant, ambiguous
+   objects would turn the hardening section from a diagnosis into a result.
+2. **Add tracking.** ByteTrack on top of the detector, over real drone
+   footage, with track-loss rate per sequence. The job title this project
+   targets is "detect and track"; the second half is missing.
+3. **Measure int8 where it should win.** QNN execution provider on the
+   Snapdragon NPU, and XNNPACK on the CPU. If neither helps, the "backend
+   first" conclusion is confirmed on two more backends; if one does, the
+   size and speed gains finally line up.
+4. **Localization, not detection.** The 0.988 to 0.751 gap between mAP50 and
+   mAP50-95 says boxes are loose. A higher input resolution or a small model
+   variant would tell whether it is a capacity or a resolution problem.
+5. **Train on small objects on purpose.** Oversample the under-32 px
+   instances, or tile the images, and measure whether Bird AP50 on small
+   objects moves from 0.38. If it does not, the data is the limit, and that is
+   worth knowing before buying hardware.
 
-## Ce que je ferais avec un mois de plus
+## License
 
-À remplir en fin de projet.
+Code under MIT, see `LICENSE`. The dataset is CC BY 4.0 by its authors and is
+not redistributed.
