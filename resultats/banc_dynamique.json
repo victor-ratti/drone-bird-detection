@@ -1,0 +1,47 @@
+{
+  "machine": {
+    "processeur": "Snapdragon(R) X 12-core X1E80100 @ 3.40 GHz",
+    "architecture": "ARM64",
+    "systeme": "Windows 11",
+    "coeurs_logiques": 12,
+    "onnxruntime": "1.29.0"
+  },
+  "mesures": [
+    {
+      "modele": "baseline_n_best.onnx",
+      "taille_mo": 10.11,
+      "forme_entree": [
+        1,
+        3,
+        640,
+        640
+      ],
+      "runs": 100,
+      "threads": "auto",
+      "latence_ms_median": 542.32,
+      "latence_ms_moyenne": 485.52,
+      "latence_ms_p90": 735.61,
+      "latence_ms_min": 22.33,
+      "latence_ms_max": 813.48,
+      "fps_median": 1.8
+    },
+    {
+      "modele": "baseline_n_best_int8_dynamique.onnx",
+      "taille_mo": 2.85,
+      "forme_entree": [
+        1,
+        3,
+        640,
+        640
+      ],
+      "runs": 100,
+      "threads": "auto",
+      "latence_ms_median": 1938.9,
+      "latence_ms_moyenne": 1825.19,
+      "latence_ms_p90": 2528.73,
+      "latence_ms_min": 676.18,
+      "latence_ms_max": 2858.17,
+      "fps_median": 0.5
+    }
+  ]
+}
