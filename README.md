@@ -5,6 +5,14 @@ modèle sur un ordinateur faible, du type de ceux qu'un drone embarque.
 
 > Projet en cours. Les chiffres ci-dessous sont mis à jour au fil des étapes.
 
+**Résumé en trois lignes.** Un YOLOv11 nano atteint 0.988 de mAP50 sur ce jeu,
+mieux que la référence publiée. En auditant ce résultat, trois choses
+apparaissent : les classes sont séparables à 76 % par la seule taille des
+boîtes, la performance tombe à 0.62 sur les objets de moins de 32 pixels, et
+la quantification int8 ralentit le modèle au lieu de l'accélérer sur cette
+cible ARM. Le dépôt documente autant la méthode de mesure que les résultats,
+parce que trois mesures spectaculaires s'y sont révélées être des artefacts.
+
 ## Le problème
 
 Un système de détection de drones doit répondre à deux contraintes en même
