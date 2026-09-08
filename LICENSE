@@ -20,6 +20,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-Le code de ce depot est sous licence MIT.
-Le jeu de donnees utilise, Drone-Bird-Detection de MyWorkspace sur Roboflow
-Universe, est distribue sous licence CC BY 4.0 et n'est pas redistribue ici.
+The code in this repository is MIT licensed.
+The dataset used, Drone-Bird-Detection by MyWorkspace on Roboflow Universe, is
+distributed under CC BY 4.0 and is not redistributed here.

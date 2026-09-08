@@ -1,0 +1,11 @@
+{
+  "threshold_px": 152.4,
+  "class_above": "Bird",
+  "train_accuracy": 0.7464,
+  "test_accuracy": 0.7611,
+  "per_class_test": {
+    "Bird": 0.7368,
+    "Drone": 0.786
+  },
+  "scale_ratio": 5.72
+}

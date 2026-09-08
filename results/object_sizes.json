@@ -1,0 +1,84 @@
+{
+  "thresholds_px": {
+    "small": 1024,
+    "medium": 9216
+  },
+  "input_size": 640,
+  "splits": {
+    "train": {
+      "objects": 6245,
+      "small": 572,
+      "medium": 2119,
+      "large": 3554,
+      "median_side_px": 152.4,
+      "p10_side_px": 38.4,
+      "min_side_px": 14.2,
+      "per_class": {
+        "Bird": {
+          "objects": 3055,
+          "small": 208,
+          "medium": 409,
+          "large": 2438,
+          "median_side_px": 351.4
+        },
+        "Drone": {
+          "objects": 3190,
+          "small": 364,
+          "medium": 1710,
+          "large": 1116,
+          "median_side_px": 74.5
+        }
+      }
+    },
+    "valid": {
+      "objects": 1752,
+      "small": 124,
+      "medium": 590,
+      "large": 1038,
+      "median_side_px": 159.7,
+      "p10_side_px": 41.8,
+      "min_side_px": 11.9,
+      "per_class": {
+        "Bird": {
+          "objects": 808,
+          "small": 30,
+          "medium": 106,
+          "large": 672,
+          "median_side_px": 372.6
+        },
+        "Drone": {
+          "objects": 944,
+          "small": 94,
+          "medium": 484,
+          "large": 366,
+          "median_side_px": 77.7
+        }
+      }
+    },
+    "test": {
+      "objects": 900,
+      "small": 64,
+      "medium": 349,
+      "large": 487,
+      "median_side_px": 137.2,
+      "p10_side_px": 42.0,
+      "min_side_px": 16.0,
+      "per_class": {
+        "Bird": {
+          "objects": 456,
+          "small": 12,
+          "medium": 91,
+          "large": 353,
+          "median_side_px": 378.2
+        },
+        "Drone": {
+          "objects": 444,
+          "small": 52,
+          "medium": 258,
+          "large": 134,
+          "median_side_px": 66.2
+        }
+      }
+    }
+  }
+}

@@ -1,18 +1,18 @@
 {
-  "modele": "baseline_n_best.onnx",
+  "model": "baseline_n_best.onnx",
   "split": "test",
   "iou": 0.5,
-  "cote_max": 96.0,
-  "cote_min": 32.0,
+  "max_side": 96.0,
+  "min_side": 32.0,
   "map50": 0.8631,
-  "par_classe": {
+  "per_class": {
     "Bird": {
       "ap50": 0.8047,
-      "objets": 95
+      "objects": 95
     },
     "Drone": {
       "ap50": 0.9215,
-      "objets": 233
+      "objects": 233
     }
   },
   "confusion": [
